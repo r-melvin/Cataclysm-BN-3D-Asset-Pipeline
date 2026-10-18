@@ -8,6 +8,8 @@ from typing import Sequence
 
 from PIL import Image
 
+from sprite_pipeline.vox import write_vox_manifest
+
 VIEW_ORDER = ("left", "front", "right", "back")
 
 
@@ -76,19 +78,39 @@ def build_parser() -> argparse.ArgumentParser:
     for name in VIEW_ORDER:
         four_view.add_argument(f"--{name}", type=Path, required=True)
     four_view.add_argument("--output", type=Path, required=True)
+
+    inspect = commands.add_parser(
+        "inspect-vox", help="validate a single-model .vox asset and write its manifest"
+    )
+    inspect.add_argument("--input", type=Path, required=True)
+    inspect.add_argument("--manifest", type=Path)
+    inspect.add_argument(
+        "--asset-kind", choices=("vehicle-part", "character"), required=True
+    )
+    inspect.add_argument("--asset-id")
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        manifest = prepare_four_view(
-            {name: getattr(args, name) for name in VIEW_ORDER}, args.output
-        )
+        if args.command == "prepare-four-view":
+            manifest = prepare_four_view(
+                {name: getattr(args, name) for name in VIEW_ORDER}, args.output
+            )
+            print(f"Wrote {args.output} and {manifest}")
+        else:
+            manifest_path = args.manifest or args.input.with_suffix(".manifest.json")
+            write_vox_manifest(
+                args.input,
+                manifest_path,
+                asset_kind=args.asset_kind,
+                asset_id=args.asset_id,
+            )
+            print(f"Validated {args.input}; wrote {manifest_path}")
     except (OSError, ValueError) as error:
         print(f"sprite-pipeline: error: {error}")
         return 2
-    print(f"Wrote {args.output} and {manifest}")
     return 0
 
 

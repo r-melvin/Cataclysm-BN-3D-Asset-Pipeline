@@ -9,16 +9,20 @@ public sealed class KenneyShapeProbe : MelonMod
     public override void OnInitializeMelon()
     {
         var processName = Process.GetCurrentProcess().ProcessName;
-        if (!processName.Contains("Kenney Shape", StringComparison.OrdinalIgnoreCase))
+        var applicationDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var assemblyDirectory = Path.Combine(applicationDirectory, "Kenney Shape_Data", "Managed");
+        var gameAssemblyPath = Path.Combine(assemblyDirectory, "Assembly-CSharp.dll");
+        if (!File.Exists(gameAssemblyPath))
         {
-            LoggerInstance.Error($"Refusing to inspect unexpected process '{processName}'. Run this probe only in Kenney Shape.");
+            LoggerInstance.Error($"Refusing to inspect '{processName}' from '{applicationDirectory}': Kenney Shape's managed game assembly was not found.");
             return;
         }
 
-        LoggerInstance.Msg($"Kenney Shape process detected: {processName}");
+        LoggerInstance.Msg($"Kenney Shape installation detected: {processName} at {applicationDirectory}");
         var assemblies = AppDomain.CurrentDomain.GetAssemblies()
             .OrderBy(assembly => assembly.GetName().Name, StringComparer.Ordinal)
             .ToArray();
+        var gameAssemblyLoaded = false;
         foreach (var assembly in assemblies)
         {
             var assemblyName = assembly.GetName().Name ?? "<unnamed>";
@@ -27,6 +31,8 @@ public sealed class KenneyShapeProbe : MelonMod
             {
                 continue;
             }
+            gameAssemblyLoaded = true;
+            LoggerInstance.Msg($"Inspecting game assembly: {assembly.Location}");
 
             foreach (var type in GetLoadableTypes(assembly))
             {
@@ -37,15 +43,20 @@ public sealed class KenneyShapeProbe : MelonMod
                               .Where(method => method.Name.Contains("export", StringComparison.OrdinalIgnoreCase) ||
                                      method.Name.Contains("save", StringComparison.OrdinalIgnoreCase) ||
                                      method.Name.Contains("voxel", StringComparison.OrdinalIgnoreCase))
-                              .Select(method => method.Name)
+                              .Select(method => method.ToString())
                               .Distinct(StringComparer.Ordinal)
-                              .OrderBy(name => name, StringComparer.Ordinal)
+                              .OrderBy(signature => signature, StringComparer.Ordinal)
                               .ToArray();
                 if (methods.Length > 0)
                 {
-                    LoggerInstance.Msg($"Candidate API: {typeName}: {string.Join(", ", methods)}");
+                    LoggerInstance.Msg($"Candidate API: {typeName}: {string.Join(" | ", methods)}");
                 }
             }
+        }
+
+        if (!gameAssemblyLoaded)
+        {
+            LoggerInstance.Msg("Kenney Shape was detected, but Assembly-CSharp has not loaded yet. Review a later log after the main scene starts.");
         }
     }
 

@@ -5,8 +5,9 @@ A separate, offline-friendly project for preparing directional sprite art and au
 ## Current workflow
 
 - `sprite-pipeline prepare-four-view` validates and packs left, front, right, and back PNGs into the horizontal sheet expected by [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer). That application currently exports OBJ; importing its output into the BN renderer is a separate roadmap item.
+- `sprite-pipeline inspect-vox` validates a single-model MagicaVoxel file against the subset currently consumed by the BN renderer and writes a SHA-256 asset manifest.
 - [Kenney Shape](https://kenney.nl/tools/kenney-shape) is an optional authoring tool. It can export MagicaVoxel `.vox` files that the renderer can load for vehicle parts. Install it separately; this repository does not include or redistribute the Kenney Shape ZIP, executable, or other application files.
-- An optional MelonLoader probe lives in `adapters/kenney-shape-probe/`. The local Kenney Shape package is Unity 2021.3.45f2 with Mono managed assemblies, which makes the adapter plausible; it has not yet been bootstrapped with MelonLoader. The probe only reports loaded assemblies and candidate export/save methods. It does not patch or automate the application yet. The adapter is optional and is not required for the image preparation command or for using exported `.vox` files.
+- An optional MelonLoader probe lives in `adapters/kenney-shape-probe/`. The local Kenney Shape package is Unity 2021.3.45f2 with Mono managed assemblies. The probe is scoped to that installation and reports candidate export/save method signatures, but it has not yet been bootstrapped with MelonLoader. It does not patch or automate the application. The adapter is optional and is not required for the image preparation or `.vox` validation commands.
 
 These tools are not yet one end-to-end converter: the voxelizer exports OBJ and Kenney Shape exports `.vox`, and Kenney Shape does not document OBJ import. The pipeline keeps those paths explicit instead of silently changing model data.
 
@@ -25,6 +26,17 @@ sprite-pipeline prepare-four-view \
 ```
 
 Inputs must have identical dimensions. The output is RGBA PNG in `[LEFT, FRONT, RIGHT, BACK]` order, with an adjacent JSON manifest recording dimensions, input names, hashes, and the required tool settings. No images are resized or recolored.
+
+Validate a `.vox` model exported from Kenney Shape before handing it to the renderer:
+
+```sh
+sprite-pipeline inspect-vox \
+  --input path/to/wheel.vox \
+  --asset-kind vehicle-part \
+  --asset-id wheel
+```
+
+The command accepts either `vehicle-part` or `character`, rejects malformed voxel coordinates and multi-model scene files the renderer does not yet support, and writes `wheel.manifest.json` beside the model by default. The manifest records the source hash, dimensions, voxel count, and compatibility subset.
 
 Run checks with:
 
