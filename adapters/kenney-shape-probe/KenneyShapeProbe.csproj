@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>KenneyShapeProbe</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MELONLOADER_DIR)/MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <Target Name="RequireMelonLoaderPath" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(MELONLOADER_DIR)' == ''" Text="Set MELONLOADER_DIR to the user's local MelonLoader folder; do not copy MelonLoader binaries into this repository." />
+    <Error Condition="!Exists('$(MELONLOADER_DIR)/MelonLoader.dll')" Text="MelonLoader.dll was not found under MELONLOADER_DIR." />
+  </Target>
+</Project>
