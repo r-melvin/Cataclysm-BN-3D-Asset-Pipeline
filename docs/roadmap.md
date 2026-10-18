@@ -8,12 +8,12 @@
 - Inspect single-model MagicaVoxel files against the current renderer's `SIZE`/`XYZI` subset.
 - Reject unsupported multi-model scenes, invalid palette indices, duplicate voxels, and out-of-range coordinates; emit asset manifests for vehicle parts and characters.
 
-## 2. Kenney Shape automation feasibility (probe scaffolded; runtime validation pending)
+## 2. Kenney Shape export helper (prototype implemented; GUI validation pending)
 
 - Confirm the installed Kenney Shape version and whether it uses Unity Mono or IL2CPP.
 - Inspect only the user's separately installed application; never include its ZIP, executable, assemblies, or assets in this repository.
-- Build and run the local-only `KenneyShapeProbe` against that runtime. It logs loaded assemblies and candidate method signatures without patching them. The local project targets `.NET Standard 2.1`, matching the documented MelonLoader target for Mono on Unity 2021.2 or newer.
-- Determine whether the application exposes a safe project-open/export workflow. Prototype automation only after the probe identifies a stable path; keep a documented manual export path if hooks are brittle or unavailable.
+- The local-only `KenneyShapeProbe` builds against the installed `MelonLoader/net35` assemblies and Harmony. Static inspection confirmed the `ExportVoxel.Export()` entry point and VOX save dialog API. F8 calls the export method and redirects its save dialog to a timestamped file.
+- Confirm mod loading, F8 interaction, and a valid exported file in a graphical Kenney Shape session. Keep the documented manual export path available if hooks are brittle or unavailable.
 - Do not make a MelonLoader dependency part of the core pipeline.
 
 ## 3. Vehicle model workflow
@@ -23,11 +23,19 @@
 - Compare in a real BN vehicle scene across yaw, open/broken states, lighting, and adjacent part configurations.
 - Record palette, scale normalization, pivot, source, and license beside each model.
 
-## 4. Character model workflow
+Vehicle asset handoff path: `data/raw/r3d/vehicle_parts/<native-part-id>.vox`.
+
+## 3a. Optional voxel item workflow
+
+- Create a single-model `.vox` file named for the BN item type ID.
+- Validate it with `sprite-pipeline inspect-vox` and place it at `data/raw/r3d/items/<item-type-id>.vox`.
+- Enable the renderer's **R3D voxel items** option to use these optional assets; missing files continue to use the normal renderer path.
+
+## 4. Character model workflow (future)
 
 - Prepare and validate a four-view character sheet.
 - Generate an OBJ with 2d-to-3d-voxelizer and assess its geometry/palette and license.
-- Select a maintainable OBJ-to-renderer asset boundary or adapt the voxelizer's exporter to `.vox`.
+- Select a maintainable OBJ-to-renderer asset boundary or adapt the voxelizer's exporter to `.vox`. OBJ import and renderer-ready character assets are not implemented yet.
 - Preserve BN equipment layers and sprite fallback; verify facing selection against camera-relative travel.
 
 ## 5. End-to-end orchestration
