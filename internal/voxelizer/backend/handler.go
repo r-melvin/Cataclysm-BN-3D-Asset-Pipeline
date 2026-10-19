@@ -2,7 +2,7 @@ package backend
 
 import (
 	"context"
-	"github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/tools/voxelizer-backend/backend/logger"
+	"github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/internal/voxelizer/backend/logger"
 	"math"
 	"runtime"
 	"runtime/debug"

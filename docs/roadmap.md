@@ -9,13 +9,13 @@
 - Inspect single-model MagicaVoxel files against the current renderer's `SIZE`/`XYZI` subset.
 - Reject unsupported multi-model scenes, invalid palette indices, duplicate voxels, and out-of-range coordinates; emit asset manifests for vehicle parts and characters.
 
-## 2. Kenney Shape export helper (prototype implemented; GUI validation pending)
+## 2. Kenney Shape export helper (headless path implemented; cross-platform runtime checks pending)
 
 - Confirm the installed Kenney Shape version and whether it uses Unity Mono or IL2CPP.
 - Inspect only the user's separately installed application; never include its ZIP, executable, assemblies, or assets in this repository.
-- The local-only `KenneyShapeProbe` builds against the installed `MelonLoader/net35` assemblies and Harmony. Static inspection confirmed the `ExportVoxel.Export()` entry point and VOX save dialog API. F8 calls the export method and redirects its save dialog to a timestamped file.
-- Confirm mod loading, F8 interaction, and a valid exported file in a graphical Kenney Shape session. Keep the documented manual export path available if hooks are brittle or unavailable.
-- Do not make a MelonLoader dependency part of the core pipeline.
+- `sprite-pipeline kenney-export` embeds and builds the `KenneyShapeProbe` against the user's MelonLoader assemblies, loads `.kenshape` through the installed `Project.LoadPath` API, and calls Kenney's VOX writer directly in batch mode.
+- Linux Unity 2021.3.45f2 Mono load/export is validated. Windows and macOS installation path/bootstrap resolution has unit coverage and native CI builds; repeat runtime smoke tests when compatible Kenney/MelonLoader installs are available on those systems.
+- Keep MelonLoader, Kenney Shape, and its project files as user-installed dependencies; never include their binaries or assets.
 
 ## 3. Vehicle model workflow
 
@@ -39,8 +39,8 @@ Vehicle asset handoff path: `data/raw/r3d/vehicle_parts/<native-part-id>.vox`.
 - Improve the `.vox` boundary or renderer format if side textures must be preserved. Per-face color support and renderer-ready character assets remain future work.
 - Preserve BN equipment layers and sprite fallback; verify facing selection against camera-relative travel.
 
-## 5. End-to-end orchestration
+## 5. End-to-end orchestration (implemented)
 
-- Add a manifest-driven command that invokes supported, locally installed tools without redistributing them.
+- The Go `sprite-pipeline` application exposes voxelization, validation, packing, and Kenney export as subcommands. It invokes only the internal Go generator and the user's installed Kenney/MelonLoader.
 - Package only generated assets, manifests, and conversion settings; exclude saves and game data unless explicitly required for a debugging capture.
 - Add deterministic validation and a small reference asset suite before considering batch conversion complete.

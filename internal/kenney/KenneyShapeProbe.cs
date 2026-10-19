@@ -22,12 +22,14 @@ public sealed class KenneyShapeProbe : MelonMod
     {
         var process_name = Process.GetCurrentProcess().ProcessName;
         var application_directory = AppDomain.CurrentDomain.BaseDirectory;
-        var game_assembly_path = Path.Combine(
-                                     application_directory,
-                                     "Kenney Shape_Data",
-                                     "Managed",
-                                     "Assembly-CSharp.dll");
-        if (!File.Exists(game_assembly_path))
+        var game_assembly_paths = new[]
+        {
+            Path.Combine(application_directory, "Kenney Shape_Data", "Managed", "Assembly-CSharp.dll"),
+            Path.Combine(application_directory, "..", "Resources", "Data", "Managed", "Assembly-CSharp.dll"),
+            Path.Combine(application_directory, "..", "Resources", "Kenney Shape_Data", "Managed", "Assembly-CSharp.dll")
+        };
+        var game_assembly_path = game_assembly_paths.FirstOrDefault(File.Exists);
+        if (game_assembly_path is null)
         {
             LoggerInstance.Error($"Refusing to inspect '{process_name}' from '{application_directory}': Kenney Shape's managed game assembly was not found.");
             return;

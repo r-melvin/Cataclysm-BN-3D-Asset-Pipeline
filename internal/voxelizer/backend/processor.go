@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
-	"github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/tools/voxelizer-backend/backend/logger"
+	"github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/internal/voxelizer/backend/logger"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"

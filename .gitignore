@@ -1,9 +1,4 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
 build/
 dist/
-.pytest_cache/
-**/bin/
-**/obj/
+sprite-pipeline
+sprite-pipeline.exe

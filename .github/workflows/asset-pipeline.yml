@@ -1,21 +1,19 @@
-name: asset pipeline CLI
+name: asset pipeline
 
 on:
   push:
     paths:
-      - "src/sprite_pipeline/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "README.md"
-      - "tools/voxelizer-backend/**"
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/asset-pipeline.yml"
   pull_request:
     paths:
-      - "src/sprite_pipeline/**"
-      - "tests/**"
-      - "pyproject.toml"
-      - "README.md"
-      - "tools/voxelizer-backend/**"
+      - "cmd/**"
+      - "internal/**"
+      - "go.mod"
+      - "go.sum"
       - ".github/workflows/asset-pipeline.yml"
   workflow_dispatch:
 
@@ -24,29 +22,24 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Test unified CLI
-        run: |
-          python -m pip install -e .
-          python -m unittest discover -s tests -v
       - uses: actions/setup-go@v5
         with:
           go-version: "1.23.x"
-          cache-dependency-path: tools/voxelizer-backend/go.sum
+          cache-dependency-path: go.sum
+      - name: Format
+        run: gofmt -w cmd internal
       - name: Check formatting
-        working-directory: tools/voxelizer-backend
-        run: test -z "$(gofmt -l backend cmd)"
+        run: git diff --exit-code
       - name: Test
-        working-directory: tools/voxelizer-backend
         run: go test ./...
       - name: Vet
-        working-directory: tools/voxelizer-backend
         run: go vet ./...
       - name: Build
-        working-directory: tools/voxelizer-backend
-        run: go build -o "$RUNNER_TEMP/bn3d-voxelizer-backend" ./cmd/voxelizer
+        run: go build ./cmd/sprite-pipeline
