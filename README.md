@@ -29,7 +29,9 @@ go build -o sprite-pipeline ./cmd/sprite-pipeline
 ./sprite-pipeline --help
 ```
 
-For Kenney Shape exports, install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and verify `dotnet --version` works in the same terminal. Install [Kenney Shape](https://kenney.nl/tools/kenney-shape) and [MelonLoader](https://github.com/LavaGang/MelonLoader) into the game for your OS, then launch the game once through MelonLoader. Pass the game install directory to `--game-dir`; on macOS, pass the `.app` bundle or a directory containing it. The command builds its small adapter against the local MelonLoader assemblies.
+The optional `kenney-export` workflow automates **Kenney Shape**, a separate Unity application. It does not install into or hook Cataclysm: Bright Nights. Install [Kenney Shape](https://kenney.nl/tools/kenney-shape) and [MelonLoader](https://github.com/LavaGang/MelonLoader) for your OS, then install MelonLoader into Kenney Shape and launch Kenney Shape once through MelonLoader. The CLI needs the Kenney Shape install location because it finds that installation's MelonLoader assemblies to build its adapter, then launches that Kenney Shape installation to load and export the project. In `--game-dir`, pass Kenney Shape's install folder on Windows/Linux or its `.app` bundle on macOS (a directory containing the bundle is also accepted). This is not a path to BN or another game.
+
+Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) for this workflow and confirm `dotnet --version` works in the same terminal. The image-to-VOX commands do not require .NET, Kenney Shape, or MelonLoader.
 
 CI runs Go tests, vet, and native builds on Linux, macOS, and Windows. Kenney's actual batch export has only been smoke-tested on Linux; see [Kenney troubleshooting](#troubleshooting) for platform limits.
 
@@ -65,7 +67,7 @@ go run ./cmd/sprite-pipeline inspect-vox --input "build/wheel.vox" --asset-kind 
 
 ## Export from Kenney Shape
 
-[Kenney Shape](https://kenney.nl/tools/kenney-shape) is an optional authoring tool. Install the app and [MelonLoader](https://github.com/LavaGang/MelonLoader) for your operating system, then launch Kenney Shape once through MelonLoader so it creates its folders. Run the export with the same Go executable:
+[Kenney Shape](https://kenney.nl/tools/kenney-shape) is the Unity app being automated. With MelonLoader installed into Kenney Shape, launch it once through MelonLoader so it creates its folders. Run the export with the same Go executable; `--game-dir` must point to that Kenney Shape install (or the macOS `.app` bundle), not BN:
 
 ```text
 go run ./cmd/sprite-pipeline kenney-export --game-dir "path/to/Kenney Shape" --project "path/to/prop.kenshape" --output "build/prop.vox" --asset-kind vehicle-part --asset-id prop
@@ -90,7 +92,7 @@ go run ./cmd/sprite-pipeline inspect-vox --help
 - If `go` or `dotnet` is not recognized, install the matching SDK and reopen the terminal so its `PATH` updates. .NET is needed only for `kenney-export`.
 - Run `go` commands from this repository's root, where `go.mod` is located.
 - If the output VOX or manifest already exists, pass `--force` to `voxelize` or `kenney-export` to replace it.
-- If `kenney-export` cannot find the game, verify `--game-dir` points to the installed game directory and that launching Kenney Shape once created its `MelonLoader` and `Mods` folders. Confirm the `dotnet` command works.
+- If `kenney-export` cannot find Kenney Shape, verify `--game-dir` points to its install folder or macOS app bundle and that launching Kenney Shape once through MelonLoader created its `MelonLoader` and `Mods` folders. Confirm the `dotnet` command works.
 - Kenney export writes a `.kenney.log` file beside the requested VOX. If the export fails, inspect that log and verify that the `.kenshape` project opens in the installed Kenney Shape version.
 - Linux Kenney export was tested with Unity 2021.3.45f2 Mono. Windows/macOS paths have unit tests and native Go builds, but application-level Kenney export remains unverified there. On macOS, Kenney Shape and MelonLoader must use compatible architectures.
 

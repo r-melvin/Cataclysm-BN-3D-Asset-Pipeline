@@ -59,7 +59,7 @@ func Export(options ExportOptions) error {
 	}
 	gameRoot, err := filepath.Abs(options.GameDirectory)
 	if err != nil {
-		return fmt.Errorf("resolve game directory: %w", err)
+		return fmt.Errorf("resolve Kenney Shape installation directory: %w", err)
 	}
 	game, err := locateInstallation(gameRoot)
 	if err != nil {
@@ -107,7 +107,7 @@ func locateInstallation(gameRoot string) (installation, error) {
 
 func locateInstallationForOS(gameRoot string, operatingSystem string) (installation, error) {
 	if info, err := os.Stat(gameRoot); err != nil || !info.IsDir() {
-		return installation{}, fmt.Errorf("game directory does not exist: %s", gameRoot)
+		return installation{}, fmt.Errorf("Kenney Shape installation directory does not exist: %s", gameRoot)
 	}
 	launchDir := gameRoot
 	gameBundle := ""

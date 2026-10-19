@@ -174,8 +174,8 @@ func voxelizeCommand(args []string, stdout io.Writer, stderr io.Writer) error {
 func kenneyExportCommand(args []string, stdout io.Writer, stderr io.Writer) error {
 	flags := flag.NewFlagSet("kenney-export", flag.ContinueOnError)
 	flags.SetOutput(stderr)
-	setUsage(flags, "Load an existing .kenshape project in Kenney Shape headlessly and export its voxel model. Requires Kenney Shape, MelonLoader, and the .NET 8 SDK.")
-	gameDirectory := flags.String("game-dir", "", "installed Kenney Shape directory or app bundle")
+	setUsage(flags, "Headlessly export a .kenshape project from Kenney Shape, the separate Unity application (not Cataclysm: Bright Nights). Requires MelonLoader installed into Kenney Shape and the .NET 8 SDK.")
+	gameDirectory := flags.String("game-dir", "", "Kenney Shape install folder or macOS .app bundle; used to find its MelonLoader assemblies and launch that app")
 	project := flags.String("project", "", "input .kenshape project path")
 	output := flags.String("output", "", "output MagicaVoxel .vox path")
 	assetKind := flags.String("asset-kind", "", "asset kind: vehicle-part or character")

@@ -91,9 +91,10 @@ func TestEverySubcommandHasDescriptiveHelp(t *testing.T) {
 		name        string
 		description string
 		options     []string
+		details     []string
 	}{
 		{name: "voxelize", description: "or four equal-sized view images into a .vox model", options: []string{"-sheet", "-left", "-front", "-right", "-back", "-output", "-voxel-scale", "-asset-kind", "-asset-id", "-force"}},
-		{name: "kenney-export", description: "Requires Kenney Shape, MelonLoader, and the .NET 8 SDK", options: []string{"-game-dir", "-project", "-output", "-asset-kind", "-asset-id", "-timeout", "-force"}},
+		{name: "kenney-export", description: "the separate Unity application (not Cataclysm: Bright Nights)", options: []string{"-game-dir", "-project", "-output", "-asset-kind", "-asset-id", "-timeout", "-force"}, details: []string{"Kenney Shape install folder or macOS .app bundle", "find its MelonLoader assemblies and launch that app"}},
 		{name: "prepare-four-view", description: "horizontal PNG sheet in LEFT, FRONT, RIGHT, BACK order", options: []string{"-left", "-front", "-right", "-back", "-output"}},
 		{name: "inspect-vox", description: "Validate a single-model MagicaVoxel .vox file", options: []string{"-input", "-manifest", "-asset-kind", "-asset-id"}},
 	}
@@ -107,6 +108,11 @@ func TestEverySubcommandHasDescriptiveHelp(t *testing.T) {
 			help := standardOutput.String() + standardError.String()
 			if !strings.Contains(help, command.description) {
 				t.Errorf("help is missing command description %q: %s", command.description, help)
+			}
+			for _, detail := range command.details {
+				if !strings.Contains(help, detail) {
+					t.Errorf("help is missing detail %q: %s", detail, help)
+				}
 			}
 			for _, option := range command.options {
 				if !strings.Contains(help, option) {
