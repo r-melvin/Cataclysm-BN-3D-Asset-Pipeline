@@ -5,7 +5,7 @@
 - Accept four PNG files in explicit left/front/right/back order.
 - Require equal dimensions and preserve source pixels, transparency, and palette appearance.
 - Emit the voxelizer-compatible horizontal sheet and a provenance manifest with SHA-256 hashes.
-- Run the pinned upstream quad generator through a headless Go CLI and write renderer-compatible `.vox` output; document the single-color-per-voxel face-color loss.
+- Run the pinned upstream quad generator through the internal Go backend called by `sprite-pipeline voxelize`; write renderer-compatible `.vox` output and document the single-color-per-voxel face-color loss.
 - Inspect single-model MagicaVoxel files against the current renderer's `SIZE`/`XYZI` subset.
 - Reject unsupported multi-model scenes, invalid palette indices, duplicate voxels, and out-of-range coordinates; emit asset manifests for vehicle parts and characters.
 
@@ -35,7 +35,7 @@ Vehicle asset handoff path: `data/raw/r3d/vehicle_parts/<native-part-id>.vox`.
 ## 4. Character model workflow (future)
 
 - Prepare and validate a four-view character sheet.
-- Generate `.vox` with the headless quad CLI and assess its geometry/palette in the renderer. Use the GUI OBJ output when per-face colors are needed.
+- Generate `.vox` with `sprite-pipeline voxelize` and assess its geometry/palette in the renderer. Use the upstream GUI OBJ output when per-face colors are needed.
 - Improve the `.vox` boundary or renderer format if side textures must be preserved. Per-face color support and renderer-ready character assets remain future work.
 - Preserve BN equipment layers and sprite fallback; verify facing selection against camera-relative travel.
 

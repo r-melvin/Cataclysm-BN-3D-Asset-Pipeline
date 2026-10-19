@@ -8,6 +8,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Sequence
 
 from PIL import Image
@@ -93,6 +94,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     inspect.add_argument("--asset-id")
 
+    voxelize = commands.add_parser(
+        "voxelize",
+        help="convert four sprite views or a prepared quad sheet to a renderer-ready VOX model",
+    )
+    voxelize.add_argument("--sheet", type=Path, help="prepared [LEFT, FRONT, RIGHT, BACK] quad sheet")
+    for name in VIEW_ORDER:
+        voxelize.add_argument(f"--{name}", type=Path, help=f"{name} view PNG")
+    voxelize.add_argument("--output", type=Path, required=True, help="output MagicaVoxel .vox file")
+    voxelize.add_argument("--voxel-scale", type=float, default=1.0)
+    voxelize.add_argument(
+        "--asset-kind", choices=("vehicle-part", "character"), required=True
+    )
+    voxelize.add_argument("--asset-id")
+    voxelize.add_argument("--force", action="store_true")
+
     kenney = commands.add_parser(
         "kenney-export",
         help="headlessly load a Kenney Shape project and export a renderer-ready VOX model",
@@ -116,6 +132,86 @@ def build_parser() -> argparse.ArgumentParser:
         help="replace an existing output file and manifest",
     )
     return parser
+
+
+def run_voxelizer_backend(input_path: Path, output_path: Path, voxel_scale: float) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    backend_dir = repo_root / "tools" / "voxelizer-backend"
+    command = [
+        "go",
+        "run",
+        "./cmd/voxelizer",
+        "--input",
+        str(input_path),
+        "--output",
+        str(output_path),
+        "--voxel-scale",
+        str(voxel_scale),
+    ]
+    environment = os.environ.copy()
+    if not environment.get("GOCACHE"):
+        go_cache = Path(tempfile.gettempdir()) / "bn3d-asset-pipeline-go-cache"
+        go_cache.mkdir(parents=True, exist_ok=True)
+        environment["GOCACHE"] = str(go_cache)
+    try:
+        process = subprocess.run(
+            command,
+            cwd=backend_dir,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        raise RuntimeError("Go is required for the sprite-pipeline voxelize stage") from error
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"voxelizer backend failed:\n{process.stdout[-2000:]}\n{process.stderr[-2000:]}"
+        )
+    if process.stdout.strip():
+        print(process.stdout.strip())
+    if process.stderr.strip():
+        print(process.stderr.strip(), file=sys.stderr)
+
+
+def voxelize(args: argparse.Namespace) -> Path:
+    output = args.output.expanduser().resolve()
+    manifest = output.with_suffix(".manifest.json")
+    if output.suffix.lower() != ".vox":
+        raise ValueError("--output must use the .vox extension")
+    if not args.force and (output.exists() or manifest.exists()):
+        raise ValueError("output or manifest already exists; pass --force to replace it")
+    if not 1 <= args.voxel_scale <= 1024:
+        raise ValueError("--voxel-scale must be between 1 and 1024")
+
+    views = {name: getattr(args, name) for name in VIEW_ORDER}
+    provided_views = [name for name, path in views.items() if path is not None]
+    if args.sheet is not None and provided_views:
+        raise ValueError("use either --sheet or all four directional views")
+    if args.sheet is None and len(provided_views) not in (0, len(VIEW_ORDER)):
+        missing = ", ".join(name for name in VIEW_ORDER if views[name] is None)
+        raise ValueError(f"all four directional views are required; missing: {missing}")
+    if args.sheet is None and not provided_views:
+        raise ValueError("provide --sheet or all four directional views")
+
+    temporary_sheet = None
+    if args.sheet is not None:
+        input_path = args.sheet.expanduser().resolve()
+        if not input_path.is_file():
+            raise ValueError("--sheet must name an existing image")
+    else:
+        resolved_views = {name: path.expanduser().resolve() for name, path in views.items()}
+        with tempfile.TemporaryDirectory(prefix="bn3d-sprite-pipeline-") as temporary_directory:
+            temporary_sheet = Path(temporary_directory) / "views.png"
+            prepare_four_view(resolved_views, temporary_sheet)
+            output.parent.mkdir(parents=True, exist_ok=True)
+            run_voxelizer_backend(temporary_sheet, output, args.voxel_scale)
+    if temporary_sheet is None:
+        output.parent.mkdir(parents=True, exist_ok=True)
+        run_voxelizer_backend(input_path, output, args.voxel_scale)
+
+    write_vox_manifest(output, manifest, asset_kind=args.asset_kind, asset_id=args.asset_id)
+    return manifest
 
 
 def kenney_export(args: argparse.Namespace) -> Path:
@@ -228,6 +324,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                 asset_id=args.asset_id,
             )
             print(f"Validated {args.input}; wrote {manifest_path}")
+        elif args.command == "voxelize":
+            manifest = voxelize(args)
+            print(f"Validated {args.output}; wrote {manifest}")
         else:
             manifest = kenney_export(args)
             print(f"Headlessly exported and validated {args.output}; wrote {manifest}")

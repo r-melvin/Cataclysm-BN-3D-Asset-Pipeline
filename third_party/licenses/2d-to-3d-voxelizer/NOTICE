@@ -1,5 +1,5 @@
 Upstream: https://github.com/GazPrash/2d-to-3d-voxelizer
 Revision: 65ccdf72b564567925a7ff3557960f08b4daed54
 License: MIT; copyright (c) 2026 GazPrash. See LICENSE.
-Vendored Go backend generation, quantization, voxel-map, and logging code is adapted to provide a headless CLI and MagicaVoxel writer.
+Vendored Go backend generation, quantization, voxel-map, and logging code is adapted for the internal backend used by the `sprite-pipeline` application and its MagicaVoxel writer.
 UI, Wails frontend, OBJ/MTL exporter, and editor UI are not included.

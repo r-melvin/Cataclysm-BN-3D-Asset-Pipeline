@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/tools/voxelizer-cli/backend"
+	"github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/tools/voxelizer-backend/backend"
 )
 
 func main() {

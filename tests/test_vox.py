@@ -5,7 +5,11 @@ import struct
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
+from PIL import Image
+
+from sprite_pipeline.cli import build_parser, voxelize
 from sprite_pipeline.vox import inspect_vox, write_vox_manifest
 
 
@@ -58,6 +62,43 @@ class VoxInspectionTest(unittest.TestCase):
             self.assertEqual(manifest["asset_kind"], "vehicle-part")
             self.assertEqual(manifest["voxel_count"], 1)
             self.assertEqual(len(manifest["sha256"]), 64)
+
+    def test_unified_voxelize_command_packs_calls_backend_and_validates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            views = {}
+            for direction in ("left", "front", "right", "back"):
+                path = root / f"{direction}.png"
+                Image.new("RGBA", (2, 2), (12, 34, 56, 255)).save(path)
+                views[direction] = path
+            output = root / "wheel.vox"
+            args = build_parser().parse_args(
+                [
+                    "voxelize",
+                    "--left", str(views["left"]),
+                    "--front", str(views["front"]),
+                    "--right", str(views["right"]),
+                    "--back", str(views["back"]),
+                    "--output", str(output),
+                    "--asset-kind", "vehicle-part",
+                    "--asset-id", "wheel",
+                ]
+            )
+
+            def fake_backend(input_path: Path, output_path: Path, voxel_scale: float) -> None:
+                self.assertEqual(input_path.name, "views.png")
+                self.assertEqual(voxel_scale, 1.0)
+                with Image.open(input_path) as sheet:
+                    self.assertEqual(sheet.size, (8, 2))
+                output_path.write_bytes(_vox_file())
+
+            with patch("sprite_pipeline.cli.run_voxelizer_backend", side_effect=fake_backend):
+                manifest_path = voxelize(args)
+
+            self.assertEqual(manifest_path, output.with_suffix(".manifest.json"))
+            self.assertEqual(inspect_vox(output).voxel_count, 1)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["asset_id"], "wheel")
 
     def test_rejects_multiple_models_unsupported_by_renderer(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
