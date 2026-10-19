@@ -1,54 +1,34 @@
 # Bright Nights 3D asset pipeline
 
-`sprite-pipeline` is one Go command-line application for preparing directional sprite art and voxel assets for the Cataclysm: Bright Nights 3D renderer. It packs four sprite views, voxelizes them, validates `.vox` files, and automates Kenney Shape exports through subcommands. Go and the MelonLoader bridge are internal implementation details; users run `sprite-pipeline` for each workflow.
+`sprite-pipeline` is one Go command-line application for preparing directional sprite art and voxel assets for the Cataclysm: Bright Nights 3D renderer. It packs four sprite views, voxelizes them, validates `.vox` files, and automates Kenney Shape exports through subcommands.
 
 ## Install
 
-For the regular image-to-VOX workflow, you need Git and [Go 1.23 or newer](https://go.dev/dl/). Only the optional Kenney Shape export also needs the .NET 8 SDK, Kenney Shape, and a compatible MelonLoader installation. The app and loader are installed separately; this repository does not include their installers or files.
-
-Clone the repository, then build it from its root. The commands below use PowerShell on Windows and the default terminal on macOS/Linux.
+Install [Go 1.23 or newer](https://go.dev/dl/), then:
 
 ```text
-git clone https://github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline.git
-cd Cataclysm-BN-3D-Asset-Pipeline
+go install github.com/r-melvin/Cataclysm-BN-3D-Asset-Pipeline/cmd/sprite-pipeline@latest
+sprite-pipeline --help
 ```
 
-Windows PowerShell:
+`go install` puts the binary in Go's bin folder (`go env GOPATH` + `/bin`). If `sprite-pipeline` is not found, add that folder to your `PATH` and reopen the terminal.
 
-```powershell
-go version
-go build -o sprite-pipeline.exe ./cmd/sprite-pipeline
-.\sprite-pipeline.exe --help
-```
+That is everything the image-to-VOX commands need. The optional `kenney-export` command additionally needs the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0), [Kenney Shape](https://kenney.nl/tools/kenney-shape) and [MelonLoader](https://github.com/LavaGang/MelonLoader); see [Export from Kenney Shape](#export-from-kenney-shape).
 
-macOS or Linux:
-
-```sh
-go version
-go build -o sprite-pipeline ./cmd/sprite-pipeline
-./sprite-pipeline --help
-```
-
-The optional `kenney-export` workflow automates **Kenney Shape**, a separate Unity application. It does not install into or hook Cataclysm: Bright Nights. Install [Kenney Shape](https://kenney.nl/tools/kenney-shape) and [MelonLoader](https://github.com/LavaGang/MelonLoader) for your OS, then install MelonLoader into Kenney Shape and launch Kenney Shape once through MelonLoader. The CLI needs the Kenney Shape install location because it finds that installation's MelonLoader assemblies to build its adapter, then launches that Kenney Shape installation to load and export the project. In `--game-dir`, pass Kenney Shape's install folder on Windows/Linux or its `.app` bundle on macOS (a directory containing the bundle is also accepted). This is not a path to BN or another game.
-
-Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) for this workflow and confirm `dotnet --version` works in the same terminal. The image-to-VOX commands do not require .NET, Kenney Shape, or MelonLoader.
-
-CI runs Go tests, vet, and native builds on Linux, macOS, and Windows. Kenney's actual batch export has only been smoke-tested on Linux; see [Kenney troubleshooting](#troubleshooting) for platform limits.
-
-The workflow commands below use `go run ./cmd/sprite-pipeline`, so they work as written in PowerShell and macOS/Linux terminals from the repository root. You can substitute the executable built above if you prefer to run the binary directly.
+To build from a clone instead: `go build ./cmd/sprite-pipeline` from the repository root.
 
 ## Convert directional sprites to VOX
 
 Pass four equal-sized view images in left/front/right/back order. The command packs them, invokes the internal voxelizer, validates the `.vox`, and writes a manifest:
 
 ```text
-go run ./cmd/sprite-pipeline voxelize --left "path/to/left.png" --front "path/to/front.png" --right "path/to/right.png" --back "path/to/back.png" --output "build/wheel.vox" --asset-kind vehicle-part --asset-id wheel
+sprite-pipeline voxelize --left "path/to/left.png" --front "path/to/front.png" --right "path/to/right.png" --back "path/to/back.png" --output "build/wheel.vox" --asset-kind vehicle-part --asset-id wheel
 ```
 
 An already packed PNG/JPEG sheet can be passed with `--sheet`. Its views must run horizontally in `[LEFT, FRONT, RIGHT, BACK]` order:
 
 ```text
-go run ./cmd/sprite-pipeline voxelize --sheet "build/wheel-quad.png" --output "build/wheel.vox" --asset-kind vehicle-part --asset-id wheel
+sprite-pipeline voxelize --sheet "build/wheel-quad.png" --output "build/wheel.vox" --asset-kind vehicle-part --asset-id wheel
 ```
 
 `--voxel-scale` accepts values from 1 to 1024; larger values reduce the generated size. The adapted upstream quad generator writes `.vox` directly instead of routing through OBJ. Output retains voxel occupancy and front/back colors, but per-side face colors are lost because MagicaVoxel stores one color per voxel. Models are limited to 256 voxels per axis and 1,000,000 occupied cells. Use `--force` to replace an existing model and manifest.
@@ -56,21 +36,26 @@ go run ./cmd/sprite-pipeline voxelize --sheet "build/wheel-quad.png" --output "b
 Use the packing stage separately when you need to inspect or keep the intermediate sheet:
 
 ```text
-go run ./cmd/sprite-pipeline prepare-four-view --left "left.png" --front "front.png" --right "right.png" --back "back.png" --output "build/wheel-quad.png"
+sprite-pipeline prepare-four-view --left "left.png" --front "front.png" --right "right.png" --back "back.png" --output "build/wheel-quad.png"
 ```
 
 Validate an existing model and write its provenance manifest:
 
 ```text
-go run ./cmd/sprite-pipeline inspect-vox --input "build/wheel.vox" --asset-kind vehicle-part --asset-id wheel
+sprite-pipeline inspect-vox --input "build/wheel.vox" --asset-kind vehicle-part --asset-id wheel
 ```
 
 ## Export from Kenney Shape
 
-[Kenney Shape](https://kenney.nl/tools/kenney-shape) is the Unity app being automated. With MelonLoader installed into Kenney Shape, launch it once through MelonLoader so it creates its folders. Run the export with the same Go executable; `--game-dir` must point to that Kenney Shape install (or the macOS `.app` bundle), not BN:
+Kenney Shape is a separate Unity application; this command automates it and does not touch Bright Nights. Setup, once:
+
+1. Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) and check `dotnet --version` works.
+2. Install [Kenney Shape](https://kenney.nl/tools/kenney-shape), install [MelonLoader](https://github.com/LavaGang/MelonLoader) into it, and launch Kenney Shape once through MelonLoader so it creates its `MelonLoader` and `Mods` folders.
+
+Then pass the Kenney Shape install folder (or the macOS `.app` bundle, or a folder containing it) as `--game-dir`:
 
 ```text
-go run ./cmd/sprite-pipeline kenney-export --game-dir "path/to/Kenney Shape" --project "path/to/prop.kenshape" --output "build/prop.vox" --asset-kind vehicle-part --asset-id prop
+sprite-pipeline kenney-export --game-dir "path/to/Kenney Shape" --project "path/to/prop.kenshape" --output "build/prop.vox" --asset-kind vehicle-part --asset-id prop
 ```
 
 The command builds its internal adapter against the local MelonLoader assemblies, starts Unity with `-batchmode -nographics`, loads the project, calls Kenney's voxel writer directly, validates the output, and writes a manifest plus Unity log. This automates loading and exporting an existing `.kenshape`; it does not create geometry or convert sprite images into Kenney projects. Use `--force` to replace an existing output and manifest.
@@ -82,15 +67,14 @@ The CLI has platform-specific launch and MelonLoader paths for Linux, Windows, a
 Show all commands, or options for any command:
 
 ```text
-go run ./cmd/sprite-pipeline --help
-go run ./cmd/sprite-pipeline voxelize --help
-go run ./cmd/sprite-pipeline kenney-export --help
-go run ./cmd/sprite-pipeline prepare-four-view --help
-go run ./cmd/sprite-pipeline inspect-vox --help
+sprite-pipeline --help
+sprite-pipeline voxelize --help
+sprite-pipeline kenney-export --help
+sprite-pipeline prepare-four-view --help
+sprite-pipeline inspect-vox --help
 ```
 
-- If `go` or `dotnet` is not recognized, install the matching SDK and reopen the terminal so its `PATH` updates. .NET is needed only for `kenney-export`.
-- Run `go` commands from this repository's root, where `go.mod` is located.
+- If `sprite-pipeline`, `go` or `dotnet` is not recognized, install the matching tool and reopen the terminal so its `PATH` updates. .NET is needed only for `kenney-export`.
 - If the output VOX or manifest already exists, pass `--force` to `voxelize` or `kenney-export` to replace it.
 - If `kenney-export` cannot find Kenney Shape, verify `--game-dir` points to its install folder or macOS app bundle and that launching Kenney Shape once through MelonLoader created its `MelonLoader` and `Mods` folders. Confirm the `dotnet` command works.
 - Kenney export writes a `.kenney.log` file beside the requested VOX. If the export fails, inspect that log and verify that the `.kenshape` project opens in the installed Kenney Shape version.

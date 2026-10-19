@@ -23,6 +23,9 @@ func main() {
 }
 
 func run(args []string, stdout io.Writer, stderr io.Writer) error {
+	if len(args) == 2 && args[0] == "help" {
+		args = []string{args[1], "--help"}
+	}
 	if len(args) == 0 || args[0] == "--help" || args[0] == "-h" || args[0] == "help" {
 		printUsage(stdout)
 		return nil
@@ -53,7 +56,7 @@ Commands:
   prepare-four-view  Pack four equal-sized directional images into a sheet
   inspect-vox        Validate one VOX model and write its asset manifest
 
-Run 'sprite-pipeline <command> --help' for command options.`)
+Run 'sprite-pipeline help <command>' or 'sprite-pipeline <command> --help' for command options.`)
 }
 
 func prepareFourViewCommand(args []string, stdout io.Writer, stderr io.Writer) error {
@@ -155,6 +158,14 @@ func voxelizeCommand(args []string, stdout io.Writer, stderr io.Writer) error {
 	inputPath, cleanup, err := createVoxelizerInput(*sheet, views)
 	if err != nil {
 		return err
+	}
+	if *force {
+		if err := removeIfExists(*output); err != nil {
+			return fmt.Errorf("remove previous output: %w", err)
+		}
+		if err := removeIfExists(manifestPath); err != nil {
+			return fmt.Errorf("remove previous manifest: %w", err)
+		}
 	}
 	if cleanup != nil {
 		defer cleanup()

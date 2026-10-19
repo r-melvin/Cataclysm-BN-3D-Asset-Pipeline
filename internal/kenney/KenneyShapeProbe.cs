@@ -9,10 +9,7 @@ public sealed class KenneyShapeProbe : MelonMod
 {
     private static string? pendingExportPath;
     private MethodInfo? add_voxel_method;
-    private MethodInfo? get_key_down_method;
-    private object? export_key_code;
     private bool installation_validated;
-    private bool game_assembly_inspected;
     private bool automation_ready;
     private bool headless_export_started;
     private bool reported_waiting_for_assembly;
@@ -40,7 +37,6 @@ public sealed class KenneyShapeProbe : MelonMod
                                        Environment.GetEnvironmentVariable("BN3D_KENNEY_EXPORT_PATH"));
         LoggerInstance.Msg($"Kenney Shape installation detected: {process_name} at {application_directory}");
         LoggerInstance.Msg($"Headless export requested: {headless_export_requested}");
-        InspectLoadedGameAssembly();
     }
 
     public override void OnUpdate()
@@ -59,24 +55,11 @@ public sealed class KenneyShapeProbe : MelonMod
         {
             headless_export_started = true;
             ExportHeadlessProject();
-            return;
-        }
-
-        if (automation_ready && get_key_down_method is not null &&
-            (bool)get_key_down_method.Invoke(null, new[] { export_key_code })!)
-        {
-            ExportCurrentModel();
         }
     }
 
     public override void OnSceneWasInitialized(int build_index, string scene_name)
     {
-        if (installation_validated && !game_assembly_inspected)
-        {
-            LoggerInstance.Msg($"Checking game assembly after scene initialization: {scene_name} ({build_index})");
-            InspectLoadedGameAssembly();
-        }
-
         if (installation_validated && !automation_ready)
         {
             TryConfigureAutomation();
@@ -119,51 +102,17 @@ public sealed class KenneyShapeProbe : MelonMod
             return;
         }
 
-        var unity_input_type = assemblies
-                               .Select(assembly => assembly.GetType("UnityEngine.Input", throwOnError: false))
-                               .FirstOrDefault(type => type is not null);
-        var key_code_type = assemblies
-                            .Select(assembly => assembly.GetType("UnityEngine.KeyCode", throwOnError: false))
-                            .FirstOrDefault(type => type is not null);
-        get_key_down_method = unity_input_type?.GetMethod(
-                                  "GetKeyDown",
-                                  BindingFlags.Public | BindingFlags.Static,
-                                  binder: null,
-                                  types: new[] { key_code_type! },
-                                  modifiers: null);
-        if (get_key_down_method is not null && key_code_type is not null)
-        {
-            export_key_code = Enum.Parse(key_code_type, "F8");
-        }
         this.add_voxel_method = add_voxel_method;
         automation_ready = true;
-        LoggerInstance.Msg(get_key_down_method is null
-                               ? "Headless export adapter initialized; no keyboard polling is required."
-                               : "F8 export enabled. Press F8 to export the active Kenney Shape voxel model to the configured output folder.");
+        LoggerInstance.Msg("Headless export adapter initialized.");
     }
 
-    private bool ExportCurrentModel(string? requested_path = null)
+    private bool ExportCurrentModel(string requested_path)
     {
-        var output_directory = Environment.GetEnvironmentVariable("BN3D_VOX_OUTPUT_DIRECTORY");
-        if (string.IsNullOrWhiteSpace(requested_path) && string.IsNullOrWhiteSpace(output_directory))
-        {
-            output_directory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Exports");
-        }
-
         try
         {
-            if (!string.IsNullOrWhiteSpace(requested_path))
-            {
-                pendingExportPath = Path.GetFullPath(requested_path);
-                Directory.CreateDirectory(Path.GetDirectoryName(pendingExportPath)!);
-            }
-            else
-            {
-                Directory.CreateDirectory(output_directory!);
-                pendingExportPath = Path.Combine(
-                                        Path.GetFullPath(output_directory!),
-                                        $"kenney-shape-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}.vox");
-            }
+            pendingExportPath = Path.GetFullPath(requested_path);
+            Directory.CreateDirectory(Path.GetDirectoryName(pendingExportPath)!);
 
             LoggerInstance.Msg($"Writing active voxel model to {pendingExportPath}");
             if (WriteProjectVox(pendingExportPath))
@@ -397,53 +346,5 @@ public sealed class KenneyShapeProbe : MelonMod
                                .First(type => type is not null)!;
         application_type.GetMethod("Quit", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null)!
         .Invoke(null, null);
-    }
-
-    private void InspectLoadedGameAssembly()
-    {
-        var game_assembly = AppDomain.CurrentDomain.GetAssemblies()
-                            .FirstOrDefault(assembly => assembly.GetName().Name == "Assembly-CSharp");
-        if (game_assembly is null)
-        {
-            if (!reported_waiting_for_assembly)
-            {
-                LoggerInstance.Msg("Kenney Shape was detected, but Assembly-CSharp has not loaded yet. The probe will retry after scene initialization.");
-                reported_waiting_for_assembly = true;
-            }
-            return;
-        }
-
-        game_assembly_inspected = true;
-        LoggerInstance.Msg($"Inspecting game assembly: {game_assembly.Location}");
-        foreach (var type in GetLoadableTypes(game_assembly))
-        {
-            var type_name = type.FullName ?? type.Name;
-            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
-                                          BindingFlags.Instance | BindingFlags.Static |
-                                          BindingFlags.DeclaredOnly)
-                          .Where(method => method.Name.Contains("export", StringComparison.OrdinalIgnoreCase) ||
-                                 method.Name.Contains("save", StringComparison.OrdinalIgnoreCase) ||
-                                 method.Name.Contains("voxel", StringComparison.OrdinalIgnoreCase))
-                          .Select(method => method.ToString())
-                          .Distinct(StringComparer.Ordinal)
-                          .OrderBy(signature => signature, StringComparer.Ordinal)
-                          .ToArray();
-            if (methods.Length > 0)
-            {
-                LoggerInstance.Msg($"Candidate API: {type_name}: {string.Join(" | ", methods)}");
-            }
-        }
-    }
-
-    private static IEnumerable<Type> GetLoadableTypes(Assembly assembly)
-    {
-        try
-        {
-            return assembly.GetTypes();
-        }
-        catch (ReflectionTypeLoadException error)
-        {
-            return error.Types.OfType<Type>();
-        }
     }
 }

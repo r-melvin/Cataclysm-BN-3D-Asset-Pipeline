@@ -68,6 +68,8 @@ func Export(options ExportOptions) error {
 	if err := buildAdapter(game.melonDir, game.modDir); err != nil {
 		return err
 	}
+	// Uninstall the adapter afterwards so it never loads in normal Kenney Shape sessions.
+	defer os.Remove(filepath.Join(game.modDir, "KenneyShapeProbe.dll"))
 	if err := os.MkdirAll(filepath.Dir(outputPath), 0o755); err != nil {
 		return fmt.Errorf("create output directory: %w", err)
 	}

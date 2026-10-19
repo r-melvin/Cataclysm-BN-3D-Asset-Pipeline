@@ -14,6 +14,4 @@ The CLI builds the adapter against the local MelonLoader assemblies, loads an ex
 
 The direct project-load and voxel-writer APIs were verified with Unity 2021.3.45f2 Mono on Linux. Windows uses MelonLoader's installed `version.dll` proxy; macOS uses its installed bootstrap dylib and Unity app bundle. Native Windows/macOS game launches are covered by path-resolution tests and CI builds, but this repository has no Kenney installations on those systems for runtime smoke tests. MelonLoader compatibility depends on the user's app architecture and loader installation.
 
-The adapter retains F8 for GUI exports. It uses the same direct voxel writer, saving to `BN3D_VOX_OUTPUT_DIRECTORY` or an `Exports` folder under the Kenney Shape install folder.
-
 Do not ship or commit the Kenney Shape ZIP, executable, Unity data, sample projects, MelonLoader, or runtime logs. If Kenney changes its internal API, update the compatibility checks and repeat the batch export smoke test.

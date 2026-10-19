@@ -133,7 +133,7 @@ func TestREADMEExamplesUseSupportedCommandsAndOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read README: %v", err)
 	}
-	examples := regexp.MustCompile(`(?m)^go run ./cmd/sprite-pipeline (voxelize|kenney-export|prepare-four-view|inspect-vox)([^\r\n]*)$`).FindAllSubmatch(readme, -1)
+	examples := regexp.MustCompile(`(?m)^sprite-pipeline (voxelize|kenney-export|prepare-four-view|inspect-vox)([^\r\n]*)$`).FindAllSubmatch(readme, -1)
 	if len(examples) < 5 {
 		t.Fatalf("expected at least five documented command examples, found %d", len(examples))
 	}
@@ -159,7 +159,7 @@ func TestREADMEExamplesUseSupportedCommandsAndOptions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("split README command %q: %v", example[0], err)
 		}
-		arguments = append(arguments[3:], "--help")
+		arguments = append(arguments[1:], "--help")
 		if err := run(arguments, &standardOutput, &standardError); err != nil {
 			t.Errorf("README command %s arguments are rejected: %v", commandName, err)
 		}
@@ -215,5 +215,16 @@ func writeSprite(t *testing.T, path string, fill color.RGBA) {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHelpCommandShowsCommandOptions(t *testing.T) {
+	var standardOutput bytes.Buffer
+	var standardError bytes.Buffer
+	if err := run([]string{"help", "voxelize"}, &standardOutput, &standardError); err != nil {
+		t.Fatalf("help voxelize: %v", err)
+	}
+	if !strings.Contains(standardError.String(), "-voxel-scale") {
+		t.Errorf("help voxelize did not print voxelize options: %q", standardError.String())
 	}
 }
