@@ -3,7 +3,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 from typing import Sequence
 
 from PIL import Image
@@ -88,7 +92,123 @@ def build_parser() -> argparse.ArgumentParser:
         "--asset-kind", choices=("vehicle-part", "character"), required=True
     )
     inspect.add_argument("--asset-id")
+
+    kenney = commands.add_parser(
+        "kenney-export",
+        help="headlessly load a Kenney Shape project and export a renderer-ready VOX model",
+    )
+    kenney.add_argument(
+        "--game-dir", type=Path, required=True,
+        help="Kenney Shape installation with MelonLoader installed",
+    )
+    kenney.add_argument("--project", type=Path, required=True, help="input .kenshape project")
+    kenney.add_argument("--output", type=Path, required=True, help="output MagicaVoxel .vox file")
+    kenney.add_argument(
+        "--asset-kind", choices=("vehicle-part", "character"), required=True
+    )
+    kenney.add_argument("--asset-id")
+    kenney.add_argument(
+        "--timeout", type=int, default=180,
+        help="maximum game runtime in seconds (default: 180)",
+    )
+    kenney.add_argument(
+        "--force", action="store_true",
+        help="replace an existing output file and manifest",
+    )
     return parser
+
+
+def kenney_export(args: argparse.Namespace) -> Path:
+    if sys.platform != "linux":
+        raise ValueError("headless Kenney export currently supports the tested Linux Mono build only")
+    if args.timeout < 1:
+        raise ValueError("--timeout must be greater than zero")
+
+    game_dir = args.game_dir.expanduser().resolve()
+    project = args.project.expanduser().resolve()
+    output = args.output.expanduser().resolve()
+    if not project.is_file() or project.suffix.lower() != ".kenshape":
+        raise ValueError("--project must name an existing .kenshape project")
+    if not game_dir.is_dir():
+        raise ValueError("--game-dir must name an installed Kenney Shape directory")
+    executable = game_dir / "Kenney Shape.x86_64"
+    melon_dir = game_dir / "MelonLoader" / "net35"
+    mods_dir = game_dir / "Mods"
+    bootstrap = game_dir / "MelonLoader.Bootstrap.so"
+    managed_game = game_dir / "Kenney Shape_Data" / "Managed" / "Assembly-CSharp.dll"
+    if not executable.is_file() or not managed_game.is_file():
+        raise ValueError("--game-dir must contain the Linux Kenney Shape Mono installation")
+    if not bootstrap.is_file() or not (melon_dir / "MelonLoader.dll").is_file():
+        raise ValueError("install and launch MelonLoader once in Kenney Shape before using kenney-export")
+    if output.suffix.lower() != ".vox":
+        raise ValueError("--output must use the .vox extension")
+    manifest = output.with_suffix(".manifest.json")
+    if not args.force and (output.exists() or manifest.exists()):
+        raise ValueError("output or manifest already exists; pass --force to replace it")
+
+    repo_root = Path(__file__).resolve().parents[2]
+    project_file = repo_root / "adapters" / "kenney-shape-probe" / "KenneyShapeProbe.csproj"
+    mod_source = repo_root / "adapters" / "kenney-shape-probe" / "bin" / "Release" / "netstandard2.1" / "KenneyShapeProbe.dll"
+    mod_target = mods_dir / "KenneyShapeProbe.dll"
+    log_path = output.with_suffix(".kenney.log")
+    mods_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        build = subprocess.run(
+            [
+                "dotnet",
+                "build",
+                str(project_file),
+                "--configuration",
+                "Release",
+                f"-p:MELONLOADER_DIR={melon_dir}",
+                "--verbosity",
+                "quiet",
+            ],
+            cwd=repo_root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError as error:
+        raise RuntimeError("dotnet is required to build the local Kenney adapter") from error
+    if build.returncode != 0 or not mod_source.is_file():
+        raise RuntimeError(
+            f"could not build Kenney adapter with dotnet:\n{build.stdout}\n{build.stderr}"
+        )
+    shutil.copy2(mod_source, mod_target)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    environment = os.environ.copy()
+    environment["LD_LIBRARY_PATH"] = str(game_dir) + os.pathsep + environment.get(
+        "LD_LIBRARY_PATH", ""
+    )
+    environment["LD_PRELOAD"] = str(bootstrap) + (
+        " " + environment["LD_PRELOAD"] if environment.get("LD_PRELOAD") else ""
+    )
+    environment["BN3D_KENNEY_PROJECT_PATH"] = str(project)
+    environment["BN3D_KENNEY_EXPORT_PATH"] = str(output)
+    try:
+        process = subprocess.run(
+            [str(executable), "-batchmode", "-nographics", "-logFile", str(log_path)],
+            cwd=game_dir,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=args.timeout,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(f"Kenney Shape exceeded {args.timeout} seconds; inspect {log_path}") from error
+    if process.returncode != 0:
+        raise RuntimeError(
+            f"Kenney Shape exited with status {process.returncode}; inspect {log_path}\n"
+            f"{process.stderr[-2000:]}"
+        )
+    if not output.is_file() or output.stat().st_size == 0:
+        raise RuntimeError(f"Kenney Shape did not create the requested output; inspect {log_path}")
+
+    write_vox_manifest(output, manifest, asset_kind=args.asset_kind, asset_id=args.asset_id)
+    return manifest
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -99,7 +219,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 {name: getattr(args, name) for name in VIEW_ORDER}, args.output
             )
             print(f"Wrote {args.output} and {manifest}")
-        else:
+        elif args.command == "inspect-vox":
             manifest_path = args.manifest or args.input.with_suffix(".manifest.json")
             write_vox_manifest(
                 args.input,
@@ -108,7 +228,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 asset_id=args.asset_id,
             )
             print(f"Validated {args.input}; wrote {manifest_path}")
-    except (OSError, ValueError) as error:
+        else:
+            manifest = kenney_export(args)
+            print(f"Headlessly exported and validated {args.output}; wrote {manifest}")
+    except (OSError, ValueError, RuntimeError) as error:
         print(f"sprite-pipeline: error: {error}")
         return 2
     return 0

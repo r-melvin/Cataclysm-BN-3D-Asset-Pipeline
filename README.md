@@ -1,60 +1,67 @@
 # Bright Nights 3D asset pipeline
 
-A separate, offline-friendly project for preparing directional sprite art and authored voxel assets for the Cataclysm: Bright Nights 3D renderer.
+A separate project for preparing directional sprite art and voxel assets for the Cataclysm: Bright Nights 3D renderer. It does not modify BN game rules or ship external editor applications.
 
-## Current workflow
+## Workflows
 
-- `sprite-pipeline prepare-four-view` validates and packs left, front, right, and back PNGs into the horizontal sheet expected by [2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer). That application currently exports OBJ; importing its output into the BN renderer is a separate roadmap item.
-- `sprite-pipeline inspect-vox` validates a single-model MagicaVoxel file against the subset currently consumed by the BN renderer and writes a SHA-256 asset manifest.
-- [Kenney Shape](https://kenney.nl/tools/kenney-shape) is an optional authoring tool. It can export MagicaVoxel `.vox` files that the renderer can load for vehicle parts. Install it separately; this repository does not include or redistribute the Kenney Shape ZIP, executable, or other application files.
-- An optional MelonLoader adapter lives in `adapters/kenney-shape-probe/`. For the local Unity 2021.3.45f2 Mono build, F8 invokes Kenney Shape's `ExportVoxel.Export()` path and redirects its save dialog to a timestamped `.vox` file. The adapter is isolated to Kenney Shape and is never loaded by BN. The adapter compiles against the app's Mono `net35` MelonLoader assemblies; runtime loading and an actual in-app export still need visual confirmation. See its README for setup and limits.
+The `sprite-pipeline` Python CLI prepares four-view sheets and validates renderer-compatible `.vox` files. The standalone Go CLI in `tools/voxelizer-cli/` converts the voxelizer's `[LEFT, FRONT, RIGHT, BACK]` quad sheet into a MagicaVoxel file. It is adapted from [GazPrash/2d-to-3d-voxelizer](https://github.com/GazPrash/2d-to-3d-voxelizer); its MIT attribution and license are retained in `third_party/licenses/2d-to-3d-voxelizer/`.
 
-These tools are not yet one end-to-end converter: the voxelizer exports OBJ and Kenney Shape exports `.vox`, and Kenney Shape does not document OBJ import. The pipeline keeps those paths explicit instead of silently changing model data.
+[Kenney Shape](https://kenney.nl/tools/kenney-shape) can author and export `.kenshape` projects. On the tested Linux Mono build, `sprite-pipeline kenney-export` launches the user's installed application under Unity `-batchmode -nographics`, loads a project, and writes a renderer-ready `.vox` using Kenney's own `VoxFileIO.SaveFile` method. This headless route requires a local MelonLoader installation and .NET SDK to compile the adapter. It does not distribute Kenney Shape or MelonLoader, and it does not author models or convert PNGs into Kenney projects. The adapter stays isolated from BN.
 
-## Install and run
+### Install the Python CLI
 
-Requires Python 3.11+ and Pillow.
+Requires Python 3.11+ and Pillow:
 
 ```sh
 python -m pip install -e .
-sprite-pipeline prepare-four-view \
-  --left path/to/left.png \
-  --front path/to/front.png \
-  --right path/to/right.png \
-  --back path/to/back.png \
-  --output build/character-quad.png
 ```
 
-Inputs must have identical dimensions. The output is RGBA PNG in `[LEFT, FRONT, RIGHT, BACK]` order, with an adjacent JSON manifest recording dimensions, input names, hashes, and the required tool settings. No images are resized or recolored.
-
-Validate a `.vox` model exported from Kenney Shape before handing it to the renderer:
+### Convert four sprite views with the voxelizer
 
 ```sh
-sprite-pipeline inspect-vox \
-  --input path/to/wheel.vox \
-  --asset-kind vehicle-part \
-  --asset-id wheel
+sprite-pipeline prepare-four-view \
+  --left path/to/left.png --front path/to/front.png \
+  --right path/to/right.png --back path/to/back.png \
+  --output build/vehicle-part-quad.png
+
+go -C tools/voxelizer-cli test ./...
+go -C tools/voxelizer-cli build -o ../../build/bn3d-voxelizer ./cmd/voxelizer
+./build/bn3d-voxelizer --input build/vehicle-part-quad.png \
+  --output build/vehicle-part.vox
+sprite-pipeline inspect-vox --input build/vehicle-part.vox \
+  --asset-kind vehicle-part --asset-id vehicle-part
 ```
 
-The command accepts either `vehicle-part` or `character`, rejects malformed voxel coordinates and multi-model scene files the renderer does not yet support, and writes `wheel.manifest.json` beside the model by default. The manifest records the source hash, dimensions, voxel count, and compatibility subset.
+The packer requires four same-size views and writes them in `[LEFT, FRONT, RIGHT, BACK]` order. The adapted upstream quad generator writes `.vox` directly instead of routing through OBJ. The result retains voxel occupancy and front/back colors; separate side-face colors from the source mesh generator cannot be represented by one palette index per voxel and are lost. The CLI enforces renderer limits of 256 voxels per axis and 1,000,000 occupied cells. `--voxel-scale` (1–1024) can reduce the generated model.
 
-Run checks with:
+### Headlessly export a Kenney Shape project
+
+Install Kenney Shape and MelonLoader yourself, then launch the app once with MelonLoader enabled so it creates its local folders. Build and export with:
+
+```sh
+sprite-pipeline kenney-export \
+  --game-dir /path/to/Kenney\ Shape \
+  --project /path/to/prop.kenshape \
+  --output build/prop.vox \
+  --asset-kind vehicle-part --asset-id prop
+```
+
+The command builds the adapter against the installed MelonLoader assembly, copies it into that installation's `Mods` directory, starts Kenney Shape with `-batchmode -nographics`, then validates the result and writes `build/prop.manifest.json`. The Unity log is saved as `build/prop.kenney.log`. Use `--force` to replace an existing output and manifest. This path requires a Linux x86-64 Unity Mono installation; the installed project is loaded through Kenney's `Project.LoadPath(string)` API. Since export uses the app's VOX generator and writer directly, no display, camera render texture, or save dialog is used. A project's authored data is still required—the CLI's parameters control input/output paths and the asset manifest, not shape generation.
+
+Validate a `.vox` produced elsewhere with `sprite-pipeline inspect-vox --input path/to/model.vox --asset-kind vehicle-part`. The validator rejects malformed coordinates and multi-model scene files unsupported by the current renderer.
+
+Run local checks with:
 
 ```sh
 python -m unittest discover -s tests -v
+go -C tools/voxelizer-cli test ./...
+go -C tools/voxelizer-cli vet ./...
 ```
 
-## Asset handoff to BN
+### Handoff to BN
 
-For a vehicle part, export an authored `.vox` from Kenney Shape and copy it to BN's `data/raw/r3d/vehicle_parts/<native-part-id>.vox`. The renderer uses that model for the matching vehicle part; missing assets continue to use its normal renderer path.
+Vehicle-part files belong at `data/raw/r3d/vehicle_parts/<native-part-id>.vox`. Optional item files belong at `data/raw/r3d/items/<item-type-id>.vox`; enable the in-game **R3D voxel items** option to show them. Character models and OBJ import are future work. Keep source projects and licenses with generated assets during development; do not put editor applications or archives in BN game data.
 
-Optional voxel item models belong at `data/raw/r3d/items/<item-type-id>.vox`. Enable the renderer's **R3D voxel items** option to display them; without an asset, items use the normal renderer path. Keep source projects and licenses with the asset during development. Do not put editor applications or their archives in the BN game data directory.
+## External tools and licensing
 
-Character models and OBJ import are future work. The four-view image packer currently prepares input for the external voxelizer, but its OBJ output is not accepted by the renderer. Do not treat a generated model as renderer-ready until a supported import path exists and it has been checked in-game from all four directions.
-
-## Project structure
-
-- `src/sprite_pipeline/`: command-line preparation and validation.
-- `tests/`: deterministic unit tests.
-- `docs/roadmap.md`: integration milestones and acceptance checks.
-- `docs/tools.md`: tool boundaries, installation links, and licensing notes.
+See [`docs/tools.md`](docs/tools.md) for official project links, tool boundaries, and upstream attribution. Kenney Shape and MelonLoader are optional separately installed dependencies; this repository contains neither application binaries nor their archives.
