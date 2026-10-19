@@ -133,6 +133,7 @@ func TestREADMEExamplesUseSupportedCommandsAndOptions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read README: %v", err)
 	}
+	readme = bytes.ReplaceAll(readme, []byte("\r\n"), []byte("\n"))
 	examples := regexp.MustCompile(`(?m)^sprite-pipeline (voxelize|kenney-export|prepare-four-view|inspect-vox)([^\r\n]*)$`).FindAllSubmatch(readme, -1)
 	if len(examples) < 5 {
 		t.Fatalf("expected at least five documented command examples, found %d", len(examples))
